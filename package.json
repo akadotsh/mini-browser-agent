@@ -1,0 +1,23 @@
+{
+  "name": "mini-browser-agent",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "mini-browser-agent": "src/index.ts"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build src/index.ts --target=bun --outdir=dist"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.3",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.75",
+    "ai": "^7.0.148",
+    "zod": "^4.6.7"
+  }
+}
