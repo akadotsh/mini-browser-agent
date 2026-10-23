@@ -56,6 +56,7 @@ export class BrowserSession {
   constructor(
     private readonly timeoutMs = 15_000,
     private readonly createView: WebViewFactory = () => new Bun.WebView({ width: 1280, height: 800 }),
+    private readonly elementTimeoutMs = 5_000,
   ) {
     this.view = this.newView();
   }
@@ -102,10 +103,27 @@ export class BrowserSession {
     return `[data-mini-browser-ref="${parsed.value}"]`;
   }
 
-  private async clickSelector(view: WebView, selector: string) {
-    await view.scrollTo(selector, { timeout: this.timeoutMs });
-    const point = await view.evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) throw new Error("Element not found"); const rect = el.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; })()`) as { x: number; y: number };
-    await view.click(point.x, point.y);
+  private async clickSelector(view: WebView, selector: string, target: string) {
+    try {
+      await view.scrollTo(selector, { timeout: this.elementTimeoutMs });
+      const point = await view.evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) throw new Error("Element not found"); const rect = el.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; })()`) as { x: number; y: number };
+      await view.click(point.x, point.y);
+    } catch (error) {
+      if (/timeout|not found|actionable/i.test(String(error))) {
+        throw new BrowserActionError(`Element ${target} was not actionable within ${this.elementTimeoutMs}ms`);
+      }
+      throw error;
+    }
+  }
+
+  private async waitForElement(view: WebView, selector: string, target: string) {
+    const deadline = Date.now() + this.elementTimeoutMs;
+    while (Date.now() < deadline) {
+      const found = await view.evaluate(`Boolean(document.querySelector(${JSON.stringify(selector)}))`);
+      if (found) return;
+      await Bun.sleep(Math.min(50, Math.max(1, deadline - Date.now())));
+    }
+    throw new BrowserActionError(`Element ${target} was not found within ${this.elementTimeoutMs}ms`);
   }
 
   private result(action: string, message: string): BrowserResult {
@@ -126,14 +144,14 @@ export class BrowserSession {
 
   async click(target: string) {
     const selector = this.selector(target);
-    await this.run(`click ${target}`, view => this.clickSelector(view, selector));
+    await this.run(`click ${target}`, view => this.clickSelector(view, selector, target));
     return this.result("click", `Clicked ${target}`);
   }
 
   async type(ref: string, text: string) {
     const selector = this.selector(ref);
     await this.run(`type ${ref}`, async view => {
-      await this.clickSelector(view, selector);
+      await this.clickSelector(view, selector, ref);
       await view.type(text);
     });
     return this.result("type", `Typed into ${ref}`);
@@ -155,7 +173,10 @@ export class BrowserSession {
     const target = selector ? parseTarget(selector) : { kind: "css" as const, value: "body" };
     if (target.kind !== "css") throw new BrowserActionError('Text target must start with "css:"');
     const script = `(() => { const el = document.querySelector(${JSON.stringify(target.value)}); if (!el) throw new Error("Element not found"); return (el.innerText || el.textContent || "").trim().slice(0, 10000); })()`;
-    return await this.run("text", view => view.evaluate(script)) as string;
+    return await this.run("text", async view => {
+      await this.waitForElement(view, target.value, selector || "body");
+      return await view.evaluate(script);
+    }) as string;
   }
 
   async extractLinks(): Promise<LinkResult[]> {
