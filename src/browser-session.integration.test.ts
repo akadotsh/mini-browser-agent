@@ -19,7 +19,7 @@ integration("Bun.WebView integration", () => {
   beforeAll(() => {
     server = Bun.serve({
       port: 0,
-      fetch: () => new Response(`<!doctype html><title>Fixture</title><main style="height:2000px"><h1>Browser fixture</h1><label>Search <input aria-label="Search"></label><input type="password" value="secret"><button onclick="document.querySelector('h1').textContent='Clicked'">Go</button><a href="/next">Next</a></main>`, { headers: { "content-type": "text/html" } }),
+      fetch: () => new Response(`<!doctype html><title>Fixture</title><main style="height:2000px"><h1>Browser fixture</h1><label>Search <input aria-label="Search"></label><input type="password" value="secret"><button onclick="document.querySelector('h1').textContent='Clicked'">Go</button><a href="/next">Next</a></main><script>setTimeout(() => document.body.insertAdjacentHTML('beforeend', '<p class="delayed">Ready later</p>'), 150)</script>`, { headers: { "content-type": "text/html" } }),
     });
     const backend = process.env.WEBVIEW_BACKEND === "chrome" || process.platform !== "darwin" ? "chrome" : "webkit";
     browser = new BrowserSession(10_000, () => new Bun.WebView({ backend }));
@@ -50,6 +50,7 @@ integration("Bun.WebView integration", () => {
     const next = updated.elements.find(element => element.role === "link")!;
     await browser.click(button.ref);
     expect(await browser.extractText("css:h1")).toBe("Clicked");
+    expect(await browser.extractText("css:.delayed")).toBe("Ready later");
     expect(await browser.extractLinks()).toEqual([{ text: "Next", href: new URL("/next", server.url).href }]);
 
     const result = await browser.screenshot(`integration-${Date.now()}.png`);
