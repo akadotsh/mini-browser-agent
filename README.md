@@ -39,6 +39,15 @@ Run a natural-language task:
 bun start -- run "Open example.com, tell me its heading, and save a screenshot"
 ```
 
+Runnable examples are available in [the examples directory](examples/):
+
+```sh
+bun examples/research.ts
+bun examples/navigation.ts
+bun examples/screenshot.ts
+bun examples/automation.ts
+```
+
 Inspect or remove settings without exposing the API key:
 
 ```sh
@@ -109,7 +118,7 @@ The process keeps one ephemeral, headless browser session alive. A snapshot assi
 | `back`, `forward`, `reload`, `url` | Use history or inspect session state |
 | `help`, `quit` | Show help or close the browser |
 
-Screenshots are stored outside the project in `~/Mini Browser Agent/Screenshots`. The folder is created automatically, and supplied paths must remain relative to it. The extension selects `.png`, `.jpg`/`.jpeg`, or `.webp`; PNG is the default and JPEG/WebP use quality 90. On WebKit, WebP is transparently converted with Bun's built-in image API. Password values are never included in snapshots. Browser operations time out after 15 seconds; a timed-out browser is recreated and must be navigated again.
+Screenshots are stored outside the project in `~/Mini Browser Agent/Screenshots`. The folder is created automatically, and supplied paths must remain relative to it. The extension selects `.png`, `.jpg`/`.jpeg`, or `.webp`; PNG is the default and JPEG/WebP use quality 90. On WebKit, WebP is transparently converted with Bun's built-in image API. Password values are never included in snapshots. Clicks and typing wait up to 5 seconds for actionable elements, and selector-based text extraction waits up to 5 seconds for an element to appear. Other browser operations time out after 15 seconds; a timed-out browser is recreated and must be navigated again.
 
 ## Tests
 
