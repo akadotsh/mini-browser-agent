@@ -5,7 +5,7 @@ import type { BrowserSession } from "./browser-session";
 import type { StoredConfig } from "./config";
 
 export type AgentConfig = { baseURL: string; model: string; apiKey?: string; maxSteps: number };
-type BrowserDriver = Pick<BrowserSession, "navigate" | "snapshot" | "click" | "type" | "press" | "scroll" | "extractText" | "extractLinks" | "screenshot" | "back" | "forward" | "reload">;
+type BrowserDriver = Pick<BrowserSession, "navigate" | "snapshot" | "click" | "type" | "press" | "scroll" | "extractText" | "extractLinks" | "screenshot" | "back" | "forward" | "reload" | "evaluate">;
 type Confirm = (message: string) => Promise<boolean>;
 
 export function readAgentConfig(env: Record<string, string | undefined> = process.env, stored: StoredConfig = {}): AgentConfig {
@@ -43,6 +43,7 @@ export function createBrowserTools(browser: BrowserDriver, confirm: Confirm, log
     press: tool({ description: "Press a keyboard key such as Enter, Tab, Escape, or ArrowDown.", inputSchema: z.object({ key: z.string() }), execute: async ({ key }) => (await approved(`Allow key press ${key}?`)) ?? run(`press ${key}`, () => browser.press(key)) }),
     scroll: tool({ description: "Scroll vertically by pixels; negative values scroll up.", inputSchema: z.object({ pixels: z.number() }), execute: ({ pixels }) => run(`scroll ${pixels}`, () => browser.scroll(pixels)) }),
     text: tool({ description: "Extract page text, optionally from an explicit css: selector.", inputSchema: z.object({ selector: z.string().optional() }), execute: ({ selector }) => run(`text${selector ? ` ${selector}` : ""}`, () => browser.extractText(selector)) }),
+    evaluate: tool({ description: "Execute a JavaScript expression in the current page and return its result. The expression can change page state.", inputSchema: z.object({ script: z.string().describe("JavaScript expression to evaluate in the page") }), execute: async ({ script }) => (await approved("Allow JavaScript execution in the current page?")) ?? run("evaluate JavaScript", () => browser.evaluate(script)) }),
     links: tool({ description: "Extract visible links from the current page.", inputSchema: z.object({}), execute: () => run("links", () => browser.extractLinks()) }),
     screenshot: tool({ description: "Save a viewport screenshot under the user's Mini Browser Agent/Screenshots folder. The optional relative path selects PNG, JPEG, or WebP by extension.", inputSchema: z.object({ path: z.string().optional() }), execute: ({ path }) => run(`screenshot${path ? ` ${path}` : ""}`, () => browser.screenshot(path)) }),
     back: tool({ description: "Navigate back in browser history.", inputSchema: z.object({}), execute: () => run("back", () => browser.back()) }),

@@ -10,6 +10,7 @@ export const browserHelp = `Commands:
   press <key>               Press Enter, Tab, Escape, arrows, etc.
   scroll <pixels>           Scroll vertically (negative goes up)
   text [css:selector]       Read page or element text
+  evaluate <expression>    Execute JavaScript in the current page
   links                     List visible links
   screenshot [path]         Save PNG, JPEG, or WebP under ~/Mini Browser Agent/Screenshots
   back | forward | reload | url | help | quit`;
@@ -30,6 +31,7 @@ export async function runBrowserRepl() {
       case "press": if (!value) throw new Error("Usage: press <key>"); result = await browser.press(value); break;
       case "scroll": result = await browser.scroll(Number(value)); break;
       case "text": result = await browser.extractText(value || undefined); break;
+      case "evaluate": if (!value) throw new Error("Usage: evaluate <JavaScript expression>"); result = await browser.evaluate(value); break;
       case "links": result = await browser.extractLinks(); break;
       case "screenshot": result = await browser.screenshot(value); break;
       case "back": result = await browser.back(); break;

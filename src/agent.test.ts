@@ -9,13 +9,16 @@ const usage = {
 
 function fakeBrowser() {
   const calls: string[] = [];
+  const evaluations: string[] = [];
   return {
     calls,
+    evaluations,
     navigate: async (url: string) => { calls.push(`open:${url}`); return { action: "open", message: "loaded", url, title: "Test" }; },
     snapshot: async () => ({ url: "https://example.com", title: "Test", text: "Hello", elements: [] }),
     click: async (target: string) => { calls.push(`click:${target}`); return {} as never; },
     type: async () => ({} as never), press: async () => ({} as never), scroll: async () => ({} as never),
     extractText: async () => "Hello", extractLinks: async () => [], screenshot: async () => ({} as never),
+    evaluate: async (script: string) => { evaluations.push(script); return script === "(6 * 7)" ? 42 : undefined; },
     back: async () => ({} as never), forward: async () => ({} as never), reload: async () => ({} as never),
   };
 }
@@ -38,6 +41,26 @@ describe("agent", () => {
     expect(browser.calls).toEqual(["open:https://example.com"]);
     expect(result.text).toBe("Opened the example page.");
     expect(result.steps).toBe(2);
+  });
+
+  test("evaluates a JavaScript math expression after confirmation", async () => {
+    const browser = fakeBrowser();
+    const confirmations: string[] = [];
+    const model = new MockLanguageModelV4({ doGenerate: [
+      { content: [{ type: "tool-call", toolCallId: "call-1", toolName: "evaluate", input: '{"script":"(6 * 7)"}' }], finishReason: { unified: "tool-calls", raw: undefined }, usage, warnings: [] },
+      { content: [{ type: "text", text: "The result is 42." }], finishReason: { unified: "stop", raw: undefined }, usage, warnings: [] },
+    ] });
+
+    const result = await runAgent({
+      prompt: "Evaluate 6 times 7 in the page context",
+      model,
+      browser,
+      confirm: async message => { confirmations.push(message); return true; },
+      log: () => {},
+    });
+    expect(browser.evaluations).toEqual(["(6 * 7)"]);
+    expect(confirmations).toEqual(["Allow JavaScript execution in the current page?"]);
+    expect(result.text).toBe("The result is 42.");
   });
 
   test("does not execute a denied sensitive action", async () => {

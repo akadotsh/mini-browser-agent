@@ -183,6 +183,11 @@ export class BrowserSession {
     return await this.run("links", view => view.evaluate(LINKS_SCRIPT)) as LinkResult[];
   }
 
+  async evaluate(script: string): Promise<unknown> {
+    if (!script.trim()) throw new BrowserActionError("JavaScript expression cannot be empty");
+    return await this.run("evaluate JavaScript", view => view.evaluate(script));
+  }
+
   async screenshot(path = "") {
     const output = resolveScreenshotPath(path);
     try {
