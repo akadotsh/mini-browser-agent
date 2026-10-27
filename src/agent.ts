@@ -5,7 +5,7 @@ import type { BrowserSession } from "./browser-session";
 import type { StoredConfig } from "./config";
 
 export type AgentConfig = { baseURL: string; model: string; apiKey?: string; maxSteps: number };
-type BrowserDriver = Pick<BrowserSession, "navigate" | "snapshot" | "click" | "type" | "press" | "scroll" | "extractText" | "extractLinks" | "screenshot" | "back" | "forward" | "reload" | "evaluate">;
+type BrowserDriver = Pick<BrowserSession, "navigate" | "snapshot" | "click" | "type" | "press" | "scroll" | "extractText" | "extractLinks" | "screenshot" | "back" | "forward" | "reload" | "evaluate" | "networkLogs">;
 type Confirm = (message: string) => Promise<boolean>;
 
 export function readAgentConfig(env: Record<string, string | undefined> = process.env, stored: StoredConfig = {}): AgentConfig {
@@ -46,6 +46,7 @@ export function createBrowserTools(browser: BrowserDriver, confirm: Confirm, log
     evaluate: tool({ description: "Execute a JavaScript expression in the current page and return its result. The expression can change page state.", inputSchema: z.object({ script: z.string().describe("JavaScript expression to evaluate in the page") }), execute: async ({ script }) => (await approved("Allow JavaScript execution in the current page?")) ?? run("evaluate JavaScript", () => browser.evaluate(script)) }),
     links: tool({ description: "Extract visible links from the current page.", inputSchema: z.object({}), execute: () => run("links", () => browser.extractLinks()) }),
     screenshot: tool({ description: "Save a viewport screenshot under the user's Mini Browser Agent/Screenshots folder. The optional relative path selects PNG, JPEG, or WebP by extension.", inputSchema: z.object({ path: z.string().optional() }), execute: ({ path }) => run(`screenshot${path ? ` ${path}` : ""}`, () => browser.screenshot(path)) }),
+    networkLogs: tool({ description: "Read recent request and response metadata captured from the headed Chrome Agent tab. Logs contain URLs, methods, status, MIME types, and failures, but not headers or response bodies. Use clear=true to read and then clear the log.", inputSchema: z.object({ limit: z.number().int().min(1).max(500).default(100), clear: z.boolean().default(false) }), execute: ({ limit, clear }) => run("network logs", async () => (await browser.networkLogs(clear)).slice(-limit)) }),
     back: tool({ description: "Navigate back in browser history.", inputSchema: z.object({}), execute: () => run("back", () => browser.back()) }),
     forward: tool({ description: "Navigate forward in browser history.", inputSchema: z.object({}), execute: () => run("forward", () => browser.forward()) }),
     reload: tool({ description: "Reload the current page.", inputSchema: z.object({}), execute: () => run("reload", () => browser.reload()) }),

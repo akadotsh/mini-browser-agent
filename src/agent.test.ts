@@ -18,6 +18,7 @@ function fakeBrowser() {
     click: async (target: string) => { calls.push(`click:${target}`); return {} as never; },
     type: async () => ({} as never), press: async () => ({} as never), scroll: async () => ({} as never),
     extractText: async () => "Hello", extractLinks: async () => [], screenshot: async () => ({} as never),
+    networkLogs: () => [],
     evaluate: async (script: string) => { evaluations.push(script); return script === "(6 * 7)" ? 42 : undefined; },
     back: async () => ({} as never), forward: async () => ({} as never), reload: async () => ({} as never),
   };
