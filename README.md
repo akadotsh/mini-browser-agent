@@ -1,5 +1,7 @@
 # Mini Browser Agent
 
+> **Experimental:** This project uses Bun's experimental `Bun.WebView` API.
+
 A lightweight browser automation CLI built on Bun's experimental `Bun.WebView`. It can run browser tasks through an OpenAI-compatible model or in an interactive, deterministic mode.
 
 ## Requirements
