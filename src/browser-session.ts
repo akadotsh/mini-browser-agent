@@ -2,13 +2,14 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { normalizeUrl, parseTarget, resolveScreenshotPath } from "./commands";
 
-type WebView = InstanceType<typeof Bun.WebView>;
+type WebView = InstanceType<typeof Bun.WebView> & { getNetworkLogs?: (clear?: boolean) => NetworkLogEntry[] };
 type WebViewFactory = () => WebView;
 
 export type PageElement = { ref: string; role: string; name: string; value?: string; href?: string };
 export type PageSnapshot = { url: string; title: string; text: string; elements: PageElement[] };
 export type BrowserResult = { action: string; message: string; url: string; title: string };
 export type LinkResult = { text: string; href: string };
+export type NetworkLogEntry = { event: "request" | "response" | "failed" | "finished"; requestId: string; url?: string; method?: string; resourceType?: string; status?: number; mimeType?: string; errorText?: string; encodedDataLength?: number };
 
 export class BrowserActionError extends Error {
   constructor(message: string, public readonly sessionReset = false) {
@@ -236,6 +237,11 @@ export class BrowserSession {
 
   status() {
     return { url: this.view.url, title: this.view.title, loading: this.view.loading };
+  }
+
+  networkLogs(clear = false): NetworkLogEntry[] {
+    if (!this.view.getNetworkLogs) throw new BrowserActionError("Network logs are available in headed Chrome mode only");
+    return this.view.getNetworkLogs(clear);
   }
 
   close() {

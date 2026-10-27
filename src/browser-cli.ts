@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline/promises";
 import { BrowserSession } from "./browser-session";
+import { createChromeBrowserSession } from "./chrome-session";
 import { parseInstruction, splitFirst } from "./commands";
 
 export const browserHelp = `Commands:
@@ -12,11 +13,13 @@ export const browserHelp = `Commands:
   text [css:selector]       Read page or element text
   evaluate <expression>    Execute JavaScript in the current page
   links                     List visible links
+  network [clear]           Show recent headed Chrome network logs; clear after reading
   screenshot [path]         Save PNG, JPEG, or WebP under ~/Mini Browser Agent/Screenshots
   back | forward | reload | url | help | quit`;
 
-export async function runBrowserRepl() {
-  const browser = new BrowserSession();
+export async function runBrowserRepl(headed = false) {
+  const session = headed ? await createChromeBrowserSession() : { browser: new BrowserSession(), close: () => {} };
+  const { browser } = session;
   const terminal = createInterface({ input: process.stdin, output: process.stdout, terminal: process.stdin.isTTY });
   console.log(`Mini Browser Agent\n${browserHelp}`);
 
@@ -33,6 +36,7 @@ export async function runBrowserRepl() {
       case "text": result = await browser.extractText(value || undefined); break;
       case "evaluate": if (!value) throw new Error("Usage: evaluate <JavaScript expression>"); result = await browser.evaluate(value); break;
       case "links": result = await browser.extractLinks(); break;
+      case "network": if (value && value !== "clear") throw new Error("Usage: network [clear]"); result = browser.networkLogs(value === "clear"); break;
       case "screenshot": result = await browser.screenshot(value); break;
       case "back": result = await browser.back(); break;
       case "forward": result = await browser.forward(); break;
@@ -40,7 +44,7 @@ export async function runBrowserRepl() {
       case "url": result = browser.status(); break;
       case "help": console.log(browserHelp); return;
       case "": return;
-      default: throw new Error(`Unknown command: ${action}. Type "help".`);
+      default: throw new Error(`Invalid command: ${action}. Try again or type "help".`);
     }
     if (typeof result === "string") console.log(result);
     else console.dir(result, { depth: null, colors: process.stdout.isTTY });
@@ -55,6 +59,7 @@ export async function runBrowserRepl() {
     }
   } finally {
     terminal.close();
-    browser.close();
+    if (headed) await session.close();
+    else browser.close();
   }
 }
