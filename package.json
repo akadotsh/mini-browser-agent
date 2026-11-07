@@ -2,6 +2,7 @@
   "name": "mini-browser-agent",
   "version": "0.1.0",
   "description": "Lightweight AI browser automation CLI powered by Bun",
+  "license": "MIT",
   "type": "module",
   "repository": {
     "type": "git",
