@@ -1,7 +1,7 @@
 # Publishing
 
-The GitHub Actions workflow publishes a public npm package when a `v*` tag is pushed. It checks that the tag matches `package.json`, installs Bun dependencies, runs type checks and tests, builds the CLI, then runs `npm publish`.
+Merge the release PR before publishing. The README contains the global install command and headed Chrome extension setup.
 
-Before the first publish, add an npm granular access token with publish access as the repository secret `NPM_TOKEN`. Push a matching tag such as `v0.1.0`; the workflow uses that secret for the first publication.
+The GitHub Actions workflow publishes a public npm package when a `v*` tag is pushed. It checks that the tag matches `package.json`, installs Bun dependencies, runs type checks and tests, and builds the CLI before publishing. It skips versions that already exist on npm.
 
-After the package exists, configure npm trusted publishing with owner `akadotsh`, repository `mini-browser-agent`, and workflow file `publish.yml`. Then remove the `NPM_TOKEN` secret. Later tagged releases use GitHub OIDC without a long-lived npm token.
+Configure npm trusted publishing with owner `akadotsh`, repository `mini-browser-agent`, and workflow file `publish.yml`. Push a tag matching the package version to publish it through GitHub OIDC. A GitHub `NPM_TOKEN` secret can be used as a fallback.
