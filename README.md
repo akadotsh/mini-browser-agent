@@ -1,18 +1,27 @@
 # Mini Browser Agent
 
 <p align="center">
-  <img src="assets/logo.png" alt="Mini Browser Agent logo" width="420">
+  <img src="https://raw.githubusercontent.com/akadotsh/mini-browser-agent/main/assets/logo.png" alt="Mini Browser Agent logo" width="420">
 </p>
 
 > **Experimental:** This project uses Bun's experimental `Bun.WebView` API.
 
-A lightweight browser automation CLI built on Bun's experimental `Bun.WebView`. It can run browser tasks through an OpenAI-compatible model or in an interactive, deterministic mode.
+A lightweight browser automation CLI powered by Bun. It can run browser tasks through an OpenAI-compatible model or in an interactive, deterministic mode.
 
 ## Requirements
 
 - Bun 1.4+ with `Bun.WebView`
 - macOS, or Chrome/Chromium/Edge/Brave on Linux and Windows
 - A tool-calling model for AI mode
+
+## Install
+
+```sh
+bun add -g mini-browser-agent
+mini-browser-agent help
+```
+
+The commands below use `bun start --` when running from a clone. After installing globally, replace that prefix with `mini-browser-agent`.
 
 ## Setup
 
@@ -36,7 +45,7 @@ bun start -- run --headed "Open example.com and tell me its heading"
 bun start -- browser --headed
 ```
 
-Headed mode connects to the Chrome window you already have open. Install this repository's `chrome-extension` folder once in that Chrome profile through `chrome://extensions` → **Developer mode** → **Load unpacked**. After extension code changes, click its **Reload** button there. With Chrome open and the extension enabled, `--headed` creates an **Agent** tab in the current window and uses that browser session, including its signed-in sites. The extension groups agent tabs under **Agent**. Chrome will show its debugger permission notice while the agent controls a tab, and may ask to allow its local connection.
+Headed mode connects to the Chrome window you already have open. Install the included `chrome-extension` folder once in that Chrome profile through `chrome://extensions` → **Developer mode** → **Load unpacked**. In a clone, it is at the repository root; after a global Bun install, run `bun pm ls -g` to find the global package directory, then load its `node_modules/mini-browser-agent/chrome-extension` folder. After extension code changes, click its **Reload** button there. With Chrome open and the extension enabled, `--headed` creates an **Agent** tab in the current window and uses that browser session, including its signed-in sites. The extension groups agent tabs under **Agent**. Chrome will show its debugger permission notice while the agent controls a tab, and may ask to allow its local connection.
 
 For hosted providers, set the base URL and model, then run `bun start -- config set api-key` to enter the key through a masked prompt. Settings are stored in the OS user config directory. Environment variables (`AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_MAX_STEPS`) override stored values; `OPENAI_API_KEY` is also accepted.
 

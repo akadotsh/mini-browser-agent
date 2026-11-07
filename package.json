@@ -1,7 +1,16 @@
 {
   "name": "mini-browser-agent",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Lightweight AI browser automation CLI powered by Bun",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akadotsh/mini-browser-agent.git"
+  },
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "files": ["src", "chrome-extension", "examples"],
   "bin": {
     "mini-browser-agent": "src/index.ts"
   },
