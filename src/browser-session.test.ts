@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BrowserActionError, BrowserSession, type PageSnapshot } from "./browser-session";
+import { BrowserActionError, BrowserSession, type PageSnapshot, type ScreenshotOptions } from "./browser-session";
 
 class FakeView {
   url = "";
@@ -10,7 +10,7 @@ class FakeView {
   clicked: unknown[] = [];
   scrolledTo = "";
   typed = "";
-  screenshotOptions: unknown;
+  screenshotOptions: ScreenshotOptions | undefined;
   clickError?: Error;
   elementChecks = 0;
   elementAfterChecks = 0;
@@ -19,8 +19,11 @@ class FakeView {
   async navigate(url: string) { this.url = url; this.title = "Fixture"; this.onNavigated?.(url, this.title); }
   async evaluate(script: string) {
     if (script.includes("rect.left +")) return { x: 10, y: 20 };
+
     if (script.startsWith("Boolean(document.querySelector")) return ++this.elementChecks > this.elementAfterChecks;
+
     if (script.includes("innerText || el.textContent")) return "Ready";
+
     return this.snapshot;
   }
   async scrollTo(selector: string) { this.scrolledTo = selector; }
@@ -28,14 +31,16 @@ class FakeView {
   async type(text: string) { this.typed = text; }
   async press() {}
   async scroll() {}
-  async screenshot(options?: unknown) { this.screenshotOptions = options; return new Blob(["image"]); }
+  async screenshot(options?: ScreenshotOptions) { this.screenshotOptions = options;
+
+ return new Blob(["image"]); }
   async goBack() {}
   async goForward() {}
   async reload() { this.onNavigated?.(this.url, this.title); }
   close() { this.closed = true; }
 }
 
-const sessionWith = (view: FakeView, timeout = 100) => new BrowserSession(timeout, () => view as never);
+const sessionWith = (view: FakeView, timeout = 100) => new BrowserSession(timeout, () => view);
 
 describe("BrowserSession", () => {
   test("uses snapshot refs for interaction", async () => {
@@ -66,14 +71,14 @@ describe("BrowserSession", () => {
   test("waits for selector text and reports a clear timeout", async () => {
     const delayed = new FakeView();
     delayed.elementAfterChecks = 2;
-    const session = new BrowserSession(500, () => delayed as never, 200);
+    const session = new BrowserSession(500, () => delayed, 200);
     expect(await session.extractText("css:.late")).toBe("Ready");
     expect(delayed.elementChecks).toBe(3);
     session.close();
 
     const missing = new FakeView();
     missing.elementAfterChecks = Number.POSITIVE_INFINITY;
-    const timed = new BrowserSession(500, () => missing as never, 5);
+    const timed = new BrowserSession(500, () => missing, 5);
     expect(timed.extractText("css:.missing")).rejects.toThrow("Element css:.missing was not found within 5ms");
     timed.close();
   });
@@ -81,35 +86,40 @@ describe("BrowserSession", () => {
   test("reports actionable element timeouts without resetting the session", async () => {
     const view = new FakeView();
     view.clickError = new Error("timeout waiting for selector to be actionable");
-    const session = new BrowserSession(500, () => view as never, 25);
+    const session = new BrowserSession(500, () => view, 25);
+
     try {
       await session.click("css:.late");
       throw new Error("Expected click to time out");
     } catch (error) {
-      expect(error).toBeInstanceOf(BrowserActionError);
-      expect((error as BrowserActionError).message).toBe("Element css:.late was not actionable within 25ms");
-      expect((error as BrowserActionError).sessionReset).toBe(false);
+      if (!(error instanceof BrowserActionError)) throw error;
+      expect(error.message).toBe("Element css:.late was not actionable within 25ms");
+      expect(error.sessionReset).toBe(false);
     }
+
     expect(view.closed).toBe(false);
     session.close();
   });
 
   test("resets the browser after a timeout", async () => {
     const views: FakeView[] = [];
+
     const session = new BrowserSession(5, () => {
       const view = new FakeView();
       view.navigate = async () => await new Promise<void>(() => {});
       views.push(view);
-      return view as never;
+
+      return view;
     });
 
     try {
       await session.navigate("example.com");
       throw new Error("Expected navigation to time out");
     } catch (error) {
-      expect(error).toBeInstanceOf(BrowserActionError);
-      expect((error as BrowserActionError).sessionReset).toBe(true);
+      if (!(error instanceof BrowserActionError)) throw error;
+      expect(error.sessionReset).toBe(true);
     }
+
     expect(views).toHaveLength(2);
     expect(views[0].closed).toBe(true);
     session.close();

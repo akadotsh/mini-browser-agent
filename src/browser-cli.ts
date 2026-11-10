@@ -26,11 +26,15 @@ export async function runBrowserRepl(headed = false) {
   async function execute(line: string): Promise<void> {
     const { action, value } = parseInstruction(line);
     let result: unknown;
+
     switch (action) {
       case "open": if (!value) throw new Error("Usage: open <url>"); result = await browser.navigate(value); break;
       case "snapshot": result = await browser.snapshot(); break;
       case "click": if (!value) throw new Error("Usage: click <ref|css:selector>"); result = await browser.click(value); break;
-      case "type": { const [ref, text] = splitFirst(value); if (!ref || !text) throw new Error("Usage: type <ref> <text>"); result = await browser.type(ref, text); break; }
+      case "type": { const [ref, text] = splitFirst(value);
+
+ if (!ref || !text) throw new Error("Usage: type <ref> <text>"); result = await browser.type(ref, text); break; }
+
       case "press": if (!value) throw new Error("Usage: press <key>"); result = await browser.press(value); break;
       case "scroll": result = await browser.scroll(Number(value)); break;
       case "text": result = await browser.extractText(value || undefined); break;
@@ -42,24 +46,35 @@ export async function runBrowserRepl(headed = false) {
       case "forward": result = await browser.forward(); break;
       case "reload": result = await browser.reload(); break;
       case "url": result = browser.status(); break;
-      case "help": console.log(browserHelp); return;
+      case "help": console.log(browserHelp);
+
+ return;
       case "": return;
       default: throw new Error(`Invalid command: ${action}. Try again or type "help".`);
     }
-    if (typeof result === "string") console.log(result);
+
+    if (isString(result)) console.log(result);
     else console.dir(result, { depth: null, colors: process.stdout.isTTY });
   }
 
   try {
     while (true) {
       let line: string;
+
       try { line = await terminal.question(process.stdin.isTTY ? "> " : ""); } catch { break; }
+
       if (line.trim().toLowerCase() === "quit") break;
+
       try { await execute(line); } catch (error) { console.error(`Error: ${error instanceof Error ? error.message : error}`); }
     }
   } finally {
     terminal.close();
+
     if (headed) await session.close();
     else browser.close();
   }
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }

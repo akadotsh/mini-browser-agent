@@ -12,6 +12,7 @@ async function waitForUrl(suffix: string) {
     if (browser.status().url.endsWith(suffix)) return;
     await Bun.sleep(20);
   }
+
   throw new Error(`Timed out waiting for URL ending in ${suffix}`);
 }
 

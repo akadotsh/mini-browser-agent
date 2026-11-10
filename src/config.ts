@@ -14,7 +14,9 @@ export type StoredConfig = z.infer<typeof storedConfigSchema>;
 
 export function configFilePath(platform = process.platform, env = process.env, home = homedir()) {
   if (platform === "darwin") return join(home, "Library", "Application Support", "Mini Browser Agent", "config.json");
+
   if (platform === "win32") return join(env.APPDATA || join(home, "AppData", "Roaming"), "Mini Browser Agent", "config.json");
+
   return join(env.XDG_CONFIG_HOME || join(home, ".config"), "mini-browser-agent", "config.json");
 }
 
@@ -22,9 +24,13 @@ export async function loadStoredConfig(path = configFilePath()): Promise<StoredC
   try {
     return storedConfigSchema.parse(JSON.parse(await readFile(path, "utf8")));
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    if (isErrnoError(error) && error.code === "ENOENT") return {};
     throw new Error(`Could not read configuration: ${error instanceof Error ? error.message : error}`);
   }
+}
+
+function isErrnoError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 export async function saveStoredConfig(config: StoredConfig, path = configFilePath()) {

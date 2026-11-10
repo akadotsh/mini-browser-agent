@@ -1,14 +1,44 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { z } from "zod";
 import { normalizeUrl, parseTarget, resolveScreenshotPath } from "./commands";
 
 type WebView = InstanceType<typeof Bun.WebView> & { getNetworkLogs?: (clear?: boolean) => NetworkLogEntry[] };
-type WebViewFactory = () => WebView;
+
+export type ScreenshotOptions = { format: "png" | "jpeg" | "webp"; quality?: number };
+
+const evaluationResultSchema = z.union([z.json(), z.undefined()]);
+
+export type BrowserEvaluationResult = z.infer<typeof evaluationResultSchema>;
+
+export type BrowserView = {
+  url: string;
+  title: string;
+  loading: boolean;
+  onNavigated: ((url: string, title: string) => void) | null;
+  navigate(url: string): Promise<void>;
+  evaluate(script: string): Promise<BrowserEvaluationResult>;
+  scrollTo(selector: string, options?: { timeout?: number }): Promise<void>;
+  click(x: number, y: number): Promise<void>;
+  type(text: string): Promise<void>;
+  press(key: string): Promise<void>;
+  scroll(x: number, y: number): Promise<void>;
+  screenshot(options: ScreenshotOptions): Promise<Blob | Buffer>;
+  reload(): Promise<void>;
+  close(): void | Promise<void>;
+  getNetworkLogs?(clear?: boolean): NetworkLogEntry[];
+};
+
+type WebViewFactory = () => BrowserView;
 
 export type PageElement = { ref: string; role: string; name: string; value?: string; href?: string };
+
 export type PageSnapshot = { url: string; title: string; text: string; elements: PageElement[] };
+
 export type BrowserResult = { action: string; message: string; url: string; title: string };
+
 export type LinkResult = { text: string; href: string };
+
 export type NetworkLogEntry = { event: "request" | "response" | "failed" | "finished"; requestId: string; url?: string; method?: string; resourceType?: string; status?: number; mimeType?: string; errorText?: string; encodedDataLength?: number };
 
 export class BrowserActionError extends Error {
@@ -49,8 +79,19 @@ const SNAPSHOT_SCRIPT = `(() => {
 const LINKS_SCRIPT = `[...document.querySelectorAll("a[href]")].filter(a => { const r = a.getBoundingClientRect(); const s = getComputedStyle(a); return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden"; }).slice(0, 100).map(a => ({ text: a.innerText.trim().replace(/\\s+/g, " ").slice(0, 160), href: a.href }))`;
 const KEYS = new Set(["Enter", "Tab", "Space", "Backspace", "Delete", "Escape", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"]);
 
+const pointSchema = z.object({ x: z.number().finite(), y: z.number().finite() });
+
+const pageSnapshotSchema = z.object({
+  url: z.string(),
+  title: z.string(),
+  text: z.string(),
+  elements: z.array(z.object({ ref: z.string(), role: z.string(), name: z.string(), value: z.string().optional(), href: z.string().optional() })),
+});
+
+const linkResultsSchema = z.array(z.object({ text: z.string(), href: z.string() }));
+
 export class BrowserSession {
-  private view: WebView;
+  private view: BrowserView;
   private refs = new Set<string>();
   private navigationCount = 0;
 
@@ -68,6 +109,7 @@ export class BrowserSession {
       this.refs.clear();
       this.navigationCount++;
     };
+
     return view;
   }
 
@@ -75,9 +117,10 @@ export class BrowserSession {
     for (let attempt = 0; attempt < 25 && this.navigationCount === start; attempt++) await Bun.sleep(20);
   }
 
-  private async run<T>(action: string, operation: (view: WebView) => Promise<T>): Promise<T> {
+  private async run<T>(action: string, operation: (view: BrowserView) => Promise<T>): Promise<T> {
     const view = this.view;
     let timer: ReturnType<typeof setTimeout>;
+
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         view.close();
@@ -99,31 +142,38 @@ export class BrowserSession {
 
   private selector(target: string): string {
     const parsed = parseTarget(target);
+
     if (parsed.kind === "css") return parsed.value;
+
     if (!this.refs.has(parsed.value)) throw new BrowserActionError(`Unknown or stale element ref: ${parsed.value}. Run snapshot again.`);
+
     return `[data-mini-browser-ref="${parsed.value}"]`;
   }
 
-  private async clickSelector(view: WebView, selector: string, target: string) {
+  private async clickSelector(view: BrowserView, selector: string, target: string) {
     try {
       await view.scrollTo(selector, { timeout: this.elementTimeoutMs });
-      const point = await view.evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) throw new Error("Element not found"); const rect = el.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; })()`) as { x: number; y: number };
+      const point = pointSchema.parse(await view.evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) throw new Error("Element not found"); const rect = el.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; })()`));
       await view.click(point.x, point.y);
     } catch (error) {
       if (/timeout|not found|actionable/i.test(String(error))) {
         throw new BrowserActionError(`Element ${target} was not actionable within ${this.elementTimeoutMs}ms`);
       }
+
       throw error;
     }
   }
 
-  private async waitForElement(view: WebView, selector: string, target: string) {
+  private async waitForElement(view: BrowserView, selector: string, target: string) {
     const deadline = Date.now() + this.elementTimeoutMs;
+
     while (Date.now() < deadline) {
-      const found = await view.evaluate(`Boolean(document.querySelector(${JSON.stringify(selector)}))`);
+      const found = z.boolean().parse(await view.evaluate(`Boolean(document.querySelector(${JSON.stringify(selector)}))`));
+
       if (found) return;
       await Bun.sleep(Math.min(50, Math.max(1, deadline - Date.now())));
     }
+
     throw new BrowserActionError(`Element ${target} was not found within ${this.elementTimeoutMs}ms`);
   }
 
@@ -134,18 +184,21 @@ export class BrowserSession {
   async navigate(url: string) {
     const normalized = normalizeUrl(url);
     await this.run(`open ${normalized}`, view => view.navigate(normalized));
+
     return this.result("open", `Loaded ${this.view.title || normalized}`);
   }
 
   async snapshot(): Promise<PageSnapshot> {
-    const snapshot = await this.run("snapshot", view => view.evaluate(SNAPSHOT_SCRIPT)) as PageSnapshot;
+    const snapshot = pageSnapshotSchema.parse(await this.run("snapshot", view => view.evaluate(SNAPSHOT_SCRIPT)));
     this.refs = new Set(snapshot.elements.map(element => element.ref));
+
     return snapshot;
   }
 
   async click(target: string) {
     const selector = this.selector(target);
     await this.run(`click ${target}`, view => this.clickSelector(view, selector, target));
+
     return this.result("click", `Clicked ${target}`);
   }
 
@@ -155,59 +208,74 @@ export class BrowserSession {
       await this.clickSelector(view, selector, ref);
       await view.type(text);
     });
+
     return this.result("type", `Typed into ${ref}`);
   }
 
   async press(key: string) {
     if (!KEYS.has(key) && [...key].length !== 1) throw new BrowserActionError(`Unsupported key: ${key}`);
+    // SAFETY: The whitelist and single-character check above match WebView's supported key names and character input.
     await this.run(`press ${key}`, view => view.press(key as Parameters<WebView["press"]>[0]));
+
     return this.result("press", `Pressed ${key}`);
   }
 
   async scroll(pixels: number) {
     if (!Number.isFinite(pixels)) throw new BrowserActionError("Scroll distance must be a finite number");
     await this.run(`scroll ${pixels}`, view => view.scroll(0, pixels));
+
     return this.result("scroll", `Scrolled ${pixels}px`);
   }
 
   async extractText(selector?: string): Promise<string> {
     const target = selector ? parseTarget(selector) : { kind: "css" as const, value: "body" };
+
     if (target.kind !== "css") throw new BrowserActionError('Text target must start with "css:"');
     const script = `(() => { const el = document.querySelector(${JSON.stringify(target.value)}); if (!el) throw new Error("Element not found"); return (el.innerText || el.textContent || "").trim().slice(0, 10000); })()`;
-    return await this.run("text", async view => {
+
+    const text = await this.run("text", async view => {
       await this.waitForElement(view, target.value, selector || "body");
+
       return await view.evaluate(script);
-    }) as string;
+    });
+
+    return z.string().parse(text);
   }
 
   async extractLinks(): Promise<LinkResult[]> {
-    return await this.run("links", view => view.evaluate(LINKS_SCRIPT)) as LinkResult[];
+    return linkResultsSchema.parse(await this.run("links", view => view.evaluate(LINKS_SCRIPT)));
   }
 
-  async evaluate(script: string): Promise<unknown> {
+  async evaluate(script: string): Promise<BrowserEvaluationResult> {
     if (!script.trim()) throw new BrowserActionError("JavaScript expression cannot be empty");
-    return await this.run("evaluate JavaScript", view => view.evaluate(script));
+
+    return evaluationResultSchema.parse(await this.run("evaluate JavaScript", view => view.evaluate(script)));
   }
 
   async screenshot(path = "") {
     const output = resolveScreenshotPath(path);
+
     try {
       await mkdir(dirname(output.absolute), { recursive: true });
       const options = output.format === "png" ? { format: "png" as const } : { format: output.format, quality: 90 };
+
       const image = await this.run(`screenshot ${output.format}`, async view => {
         try {
           return await view.screenshot(options);
         } catch (error) {
           if (output.format !== "webp" || !String(error).includes('requires backend: "chrome"')) throw error;
           const png = await view.screenshot({ format: "png" });
+
           return await new Bun.Image(png).webp({ quality: 90 }).blob();
         }
       });
+
       await Bun.write(output.absolute, image);
     } catch (error) {
       if (error instanceof BrowserActionError) throw error;
       throw new BrowserActionError(`screenshot failed: ${error instanceof Error ? error.message : error}`);
     }
+
     return { action: "screenshot", message: `Saved ${output.format.toUpperCase()} screenshot to ${output.absolute}`, path: output.absolute, format: output.format, url: this.view.url, title: this.view.title };
   }
 
@@ -218,6 +286,7 @@ export class BrowserSession {
       await view.evaluate("(() => { history.back(); return true })()");
       await this.waitForNavigation(start);
     });
+
     return this.result("back", "Went back");
   }
 
@@ -227,11 +296,13 @@ export class BrowserSession {
       await view.evaluate("(() => { history.forward(); return true })()");
       await this.waitForNavigation(start);
     });
+
     return this.result("forward", "Went forward");
   }
 
   async reload() {
     await this.run("reload", view => view.reload());
+
     return this.result("reload", "Reloaded page");
   }
 
@@ -241,6 +312,7 @@ export class BrowserSession {
 
   networkLogs(clear = false): NetworkLogEntry[] {
     if (!this.view.getNetworkLogs) throw new BrowserActionError("Network logs are available in headed Chrome mode only");
+
     return this.view.getNetworkLogs(clear);
   }
 

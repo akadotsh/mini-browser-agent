@@ -5,19 +5,25 @@ import type { BrowserSession } from "./browser-session";
 import type { StoredConfig } from "./config";
 
 export type AgentConfig = { baseURL: string; model: string; apiKey?: string; maxSteps: number };
+
 type BrowserDriver = Pick<BrowserSession, "navigate" | "snapshot" | "click" | "type" | "press" | "scroll" | "extractText" | "extractLinks" | "screenshot" | "back" | "forward" | "reload" | "evaluate" | "networkLogs">;
+
 type Confirm = (message: string) => Promise<boolean>;
 
 export function readAgentConfig(env: Record<string, string | undefined> = process.env, stored: StoredConfig = {}): AgentConfig {
   const baseURL = env.AI_BASE_URL || stored.baseURL || "http://localhost:11434/v1";
   const url = new URL(baseURL);
+
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("AI_BASE_URL must use http or https");
 
   const model = (env.AI_MODEL || stored.model)?.trim();
+
   if (!model) throw new Error("AI_MODEL is required (for example: AI_MODEL=qwen3:8b)");
 
   const maxSteps = Number(env.AI_MAX_STEPS || stored.maxSteps || 15);
+
   if (!Number.isInteger(maxSteps) || maxSteps < 1 || maxSteps > 50) throw new Error("AI_MAX_STEPS must be an integer from 1 to 50");
+
   return { baseURL: url.href.replace(/\/$/, ""), model, apiKey: env.AI_API_KEY || env.OPENAI_API_KEY || stored.apiKey, maxSteps };
 }
 
@@ -28,10 +34,13 @@ export function createCompatibleModel(config: AgentConfig) {
 export function createBrowserTools(browser: BrowserDriver, confirm: Confirm, log: (message: string) => void = console.log) {
   const run = async <T>(name: string, operation: () => Promise<T>) => {
     log(`→ ${name}`);
+
     return await operation();
   };
+
   const approved = async (description: string) => {
     const allowed = await confirm(description);
+
     if (!allowed) return { denied: true, message: "User denied this action" };
   };
 
@@ -61,6 +70,8 @@ export async function runAgent(options: { prompt: string; model: LanguageModel; 
     stopWhen: stepCountIs(options.maxSteps ?? 15),
     instructions: "You are a careful browser agent. Use browser tools to complete the user's task. Open a page, take a snapshot, use element refs, and re-snapshot after navigation or page changes. Never invent page contents or claim an action succeeded without its tool result. If an action is denied, do not retry it. Finish with a concise summary and requested findings.",
   });
+
   const result = await agent.generate({ prompt: options.prompt });
+
   return { text: result.text, steps: result.steps.length };
 }

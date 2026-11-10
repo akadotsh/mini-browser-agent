@@ -14,6 +14,7 @@ try {
     log: message => console.log(`[browser] ${message}`),
     confirm: async message => {
       console.log(`[denied] Unexpected interactive action: ${message}`);
+
       return false;
     },
   });

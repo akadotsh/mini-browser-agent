@@ -17,6 +17,7 @@ describe("configuration", () => {
     const path = join(directory, "nested", "config.json");
     await saveStoredConfig({ model: "gpt-oss:120b", apiKey: "secret", maxSteps: 12 }, path);
     expect(await loadStoredConfig(path)).toEqual({ model: "gpt-oss:120b", apiKey: "secret", maxSteps: 12 });
+
     if (process.platform !== "win32") expect((await stat(path)).mode & 0o777).toBe(0o600);
     await chmod(path, 0o600);
   });

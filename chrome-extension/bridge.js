@@ -10,9 +10,12 @@ function connect() {
     localStorage.setItem("bridge-connected", "true");
     socket.send(JSON.stringify({ type: "hello" }));
   };
+
   socket.onmessage = async event => {
     const request = JSON.parse(event.data);
+
     if (request.type === "event") return;
+
     try {
       const response = await chrome.runtime.sendMessage({ target: "background", type: "request", request });
       socket.send(JSON.stringify(response));
@@ -20,12 +23,14 @@ function connect() {
       socket.send(JSON.stringify({ id: request.id, error: String(error?.message || error) }));
     }
   };
+
   socket.onclose = () => {
     localStorage.setItem("bridge-connected", "false");
     socket = undefined;
     setTimeout(connect, retryMs);
     retryMs = Math.min(retryMs * 2, 5000);
   };
+
   socket.onerror = () => socket.close();
 }
 

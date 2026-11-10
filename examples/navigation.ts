@@ -16,6 +16,7 @@ try {
     log: message => console.log(`[browser] ${message}`),
     confirm: async message => {
       const answer = await terminal.question(`${message} [y/N] `);
+
       return answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes";
     },
   });
