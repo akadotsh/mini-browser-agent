@@ -89,7 +89,14 @@ function waitForLoad(tabId) {
     function finish(error) {
       clearTimeout(timer);
       chrome.debugger.onEvent.removeListener(listener);
-      error ? reject(error) : resolve();
+
+      if (error) {
+        reject(error);
+
+        return;
+      }
+
+      resolve();
     }
 
     chrome.debugger.onEvent.addListener(listener);
